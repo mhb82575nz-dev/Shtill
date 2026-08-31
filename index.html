@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
+<title>Шёпот — анонимный чат</title>
+<meta name="description" content="Анонимный текстовый и голосовой чат со случайным собеседником. Без регистрации.">
+<meta name="theme-color" content="#1B1523">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Шёпот">
+<link rel="manifest" href="./manifest.json">
+<style>
+  :root{
+    --bg:#1B1523; --surface:#241C2E; --surface-2:#2E2438;
+    --accent:#E8A548; --accent-dim:#A9743A; --text:#F2ECE4;
+    --text-dim:#A79AB0; --danger:#C4634F; --ok:#7CA582;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(circle at 30% 0%, #251B30 0%, var(--bg) 60%);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  }
+  header{
+    padding:16px 18px 12px;display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid rgba(255,255,255,.06);
+  }
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand-mark{
+    width:30px;height:30px;border-radius:50%;
+    background:conic-gradient(from 200deg, var(--accent), var(--accent-dim), var(--accent));
+  }
+  .brand-name{font-size:18px;font-weight:600}
+  .status-row{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim)}
+  .dot.searching{background:var(--accent);animation:pulse 1.2s infinite}
+  .dot.connected{background:var(--ok)}
+  .dot.gone{background:var(--danger)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .icon-btn{
+    background:var(--surface-2);color:var(--text-dim);border:none;border-radius:10px;
+    padding:8px 12px;font-size:13px;
+  }
+  .icon-btn.danger{color:var(--danger)}
+  #idle,#searching,#chat,#age{flex:1;min-height:0}
+  #idle,#searching,#age{
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:32px 28px;text-align:center;gap:18px;
+  }
+  #age{display:flex}
+  h1{font-size:26px;font-weight:600;margin:0;line-height:1.3}
+  p.lead{color:var(--text-dim);font-size:14.5px;line-height:1.55;margin:0;max-width:320px}
+  .big-btn{
+    background:var(--accent);color:#241605;border:none;border-radius:16px;
+    padding:16px 38px;font-size:16px;font-weight:600;
+    box-shadow:0 8px 24px rgba(232,165,72,.25);
+  }
+  .ghost{
+    background:transparent;border:1px solid var(--surface-2);color:var(--text);
+    border-radius:16px;padding:14px 28px;font-size:15px;
+  }
+  .voice-toggle{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--text-dim)}
+  .switch{width:40px;height:24px;border-radius:20px;background:var(--surface-2);position:relative}
+  .switch.on{background:var(--accent-dim)}
+  .switch::after{
+    content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;
+    background:var(--text);transition:left .2s;
+  }
+  .switch.on::after{left:18px;background:#241605}
+  .ring{
+    width:64px;height:64px;border-radius:50%;
+    border:3px solid var(--surface-2);border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #chat{display:none;flex-direction:column}
+  #messages{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:8px}
+  .bubble{max-width:78%;padding:9px 13px;border-radius:14px;font-size:15px;line-height:1.4;word-wrap:break-word}
+  .bubble.mine{align-self:flex-end;background:var(--accent-dim);color:#FBF2E4;border-bottom-right-radius:4px}
+  .bubble.theirs{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
+  .sys{align-self:center;color:var(--text-dim);font-size:12.5px;padding:4px 0}
+  #composer{
+    display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    border-top:1px solid rgba(255,255,255,.06);background:var(--surface);
+  }
+  #composer input{
+    flex:1;background:var(--surface-2);border:none;border-radius:14px;padding:11px 14px;
+    color:var(--text);font-size:15px;outline:none;
+  }
+  #composer button{
+    background:var(--accent);color:#241605;border:none;border-radius:14px;padding:0 16px;font-weight:600;
+  }
+  #mic-btn{background:var(--surface-2);color:var(--text);border:none;border-radius:14px;width:44px}
+  #mic-btn.muted{color:var(--danger)}
+  .footnote{font-size:11.5px;color:var(--text-dim);text-align:center;padding:6px 20px 10px;opacity:.7}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div>
+      <div class="brand-name">Шёпот</div>
+      <div class="status-row"><span class="dot" id="statusDot"></span><span id="statusText">не в сети</span></div>
+    </div>
+  </div>
+  <div class="header-actions" id="chatHeaderActions" style="display:none">
+    <button class="icon-btn" id="nextBtn">Дальше</button>
+    <button class="icon-btn danger" id="leaveBtn">Стоп</button>
+  </div>
+</header>
+
+<div id="age">
+  <h1>Только для взрослых</h1>
+  <p class="lead">Случайный разговор без имени и без истории. 18+.</p>
+  <button class="big-btn" id="ageYes">Мне есть 18</button>
+  <button class="ghost" id="ageNo">Мне нет 18</button>
+</div>
+
+<div id="idle">
+  <h1>Поговори с незнакомцем — без имени, без следа</h1>
+  <p class="lead">Без аккаунта. Нажал найти — и тебя соединяет со случайным человеком, который тоже ищет разговор.</p>
+  <button class="big-btn" id="findBtn">Найти собеседника</button>
+  <div class="voice-toggle">
+    <span>Включить голос</span>
+    <div class="switch" id="voiceSwitch"></div>
+  </div>
+</div>
+
+<div id="searching">
+  <div class="ring"></div>
+  <p class="lead" id="searchingText">Ищем свободного собеседника…</p>
+  <button class="icon-btn danger" id="cancelSearchBtn">Отменить</button>
+</div>
+
+<div id="denied" style="display:none;flex:1;align-items:center;justify-content:center;padding:32px;text-align:center;color:var(--text-dim)">
+  Шёпот только с 18 лет.
+</div>
+
+<div id="chat">
+  <div id="messages"></div>
+  <audio id="remoteAudio" autoplay playsinline></audio>
+  <div id="composer">
+    <button id="mic-btn" style="display:none">🎙️</button>
+    <input id="msgInput" type="text" placeholder="Сообщение…" maxlength="500">
+    <button id="sendBtn">Отпр.</button>
+  </div>
+  <div class="footnote">Не пиши имя, адрес и то, по чему тебя можно найти.</div>
+</div>
+
+<script type="module">
+import * as Y from "https://cdn.jsdelivr.net/npm/yjs@13.6.27/+esm";
+import { WebsocketProvider } from "https://cdn.jsdelivr.net/npm/y-websocket@2.1.0/+esm";
+
+const LOBBY = "shepot-lobby-2026-08";
+const WS = "wss://demos.yjs.dev";
+const myId = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+let wantVoice = false;
+let provider = null;
+let awareness = null;
+let roomProvider = null;
+let roomDoc = null;
+let roomArr = null;
+let seen = 0;
+let pc = null;
+let localStream = null;
+let currentRoom = null;
+let myRole = null;
+let micMuted = false;
+let searchTimer = null;
+
+const $ = (id) => document.getElementById(id);
+const statusDot = $("statusDot");
+const statusText = $("statusText");
+
+function setStatus(kind, text) {
+  statusDot.className = "dot " + (kind === "searching" ? "searching" : kind === "connected" ? "connected" : kind === "gone" ? "gone" : "");
+  statusText.textContent = text;
+}
+function hideAll() {
+  ["age", "idle", "searching", "chat", "denied"].forEach((id) => {
+    const el = $(id);
+    if (!el) return;
+    el.style.display = "none";
+  });
+  $("chatHeaderActions").style.display = "none";
+}
+function show(id) {
+  hideAll();
+  const el = $(id);
+  el.style.display = id === "chat" ? "flex" : "flex";
+  if (id === "chat") $("chatHeaderActions").style.display = "flex";
+}
+function addBubble(text, mine) {
+  const d = document.createElement("div");
+  d.className = "bubble " + (mine ? "mine" : "theirs");
+  d.textContent = text;
+  $("messages").appendChild(d);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+function addSys(text) {
+  const d = document.createElement("div");
+  d.className = "sys";
+  d.textContent = text;
+  $("messages").appendChild(d);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+function connectLobby() {
+  if (provider) return;
+  const doc = new Y.Doc();
+  provider = new WebsocketProvider(WS, LOBBY, doc);
+  awareness = provider.awareness;
+  provider.on("status", (e) => {
+    if (e.status === "connected" && $("idle").style.display !== "none") {
+      setStatus("", "в сети");
+    }
+  });
+}
+
+function clearSeek() {
+  if (awareness) awareness.setLocalStateField("seek", null);
+  if (searchTimer) {
+    clearInterval(searchTimer);
+    searchTimer = null;
+  }
+}
+
+function findMatch() {
+  connectLobby();
+  show("searching");
+  setStatus("searching", "ищем…");
+  $("searchingText").textContent = "Ищем свободного собеседника…";
+  awareness.setLocalStateField("seek", { id: myId, voice: wantVoice, t: Date.now() });
+
+  const tryPair = () => {
+    if (currentRoom) return;
+    const mine = awareness.getLocalState()?.seek;
+    if (!mine) return;
+    const others = [];
+    awareness.getStates().forEach((state, clientId) => {
+      if (clientId === awareness.clientID) return;
+      if (state.seek && state.seek.id) others.push(state.seek);
+    });
+    if (!others.length) return;
+    others.sort((a, b) => a.id.localeCompare(b.id));
+    const partner = others[0];
+    const roomId = [myId, partner.id].sort().join("_");
+    joinRoom(roomId, myId < partner.id ? "caller" : "callee");
+  };
+
+  awareness.on("change", tryPair);
+  searchTimer = setInterval(tryPair, 1200);
+  tryPair();
+}
+
+function joinRoom(roomId, role) {
+  if (currentRoom) return;
+  clearSeek();
+  currentRoom = roomId;
+  myRole = role;
+  show("chat");
+  setStatus("connected", "собеседник на связи");
+  $("messages").innerHTML = "";
+  addSys("Вы на связи. Собеседник такой же случайный человек.");
+  $("mic-btn").style.display = wantVoice ? "inline-block" : "none";
+
+  roomDoc = new Y.Doc();
+  roomProvider = new WebsocketProvider(WS, "shepot-room-" + roomId, roomDoc);
+  roomArr = roomDoc.getArray("msgs");
+  seen = roomArr.length;
+  roomArr.observe(() => {
+    const all = roomArr.toArray();
+    all.slice(seen).forEach((m) => {
+      if (m && m.from !== myRole) addBubble(m.text, false);
+    });
+    seen = all.length;
+  });
+
+  if (wantVoice) setupVoice(role, roomDoc);
+}
+
+function sendMessage(text) {
+  const t = (text || "").trim();
+  if (!t || !roomArr) return;
+  roomArr.push([{ from: myRole, text: t, ts: Date.now() }]);
+  addBubble(t, true);
+}
+
+async function setupVoice(role, doc) {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch {
+    addSys("Микрофон недоступен — остаёмся в тексте.");
+    return;
+  }
+  const sig = doc.getMap("sig");
+  pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+  localStream.getTracks().forEach((tr) => pc.addTrack(tr, localStream));
+  pc.ontrack = (e) => { $("remoteAudio").srcObject = e.streams[0]; };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) {
+      const list = sig.get("ice_" + role) || [];
+      list.push(e.candidate.toJSON());
+      sig.set("ice_" + role, list);
+    }
+  };
+
+  const applyIce = (fromRole) => {
+    const list = sig.get("ice_" + fromRole) || [];
+    list.forEach((c) => pc.addIceCandidate(c).catch(() => {}));
+  };
+
+  sig.observe(() => {
+    if (role === "callee" && sig.get("offer") && !pc.currentRemoteDescription) {
+      pc.setRemoteDescription(sig.get("offer")).then(async () => {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sig.set("answer", pc.localDescription.toJSON());
+        applyIce("caller");
+      });
+    }
+    if (role === "caller" && sig.get("answer") && !pc.currentRemoteDescription) {
+      pc.setRemoteDescription(sig.get("answer")).then(() => applyIce("callee"));
+    }
+  });
+
+  if (role === "caller") {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    sig.set("offer", pc.localDescription.toJSON());
+  }
+}
+
+function teardown() {
+  clearSeek();
+  if (roomProvider) { roomProvider.destroy(); roomProvider = null; }
+  if (roomDoc) { roomDoc.destroy(); roomDoc = null; }
+  roomArr = null;
+  if (pc) { try { pc.close(); } catch {} pc = null; }
+  if (localStream) { localStream.getTracks().forEach((t) => t.stop()); localStream = null; }
+  currentRoom = null;
+  myRole = null;
+}
+
+$("ageYes").onclick = () => { show("idle"); setStatus("", "в сети"); connectLobby(); };
+$("ageNo").onclick = () => { hideAll(); $("denied").style.display = "flex"; };
+$("voiceSwitch").onclick = () => {
+  wantVoice = !wantVoice;
+  $("voiceSwitch").classList.toggle("on", wantVoice);
+};
+$("findBtn").onclick = findMatch;
+$("cancelSearchBtn").onclick = () => { teardown(); show("idle"); setStatus("", "в сети"); };
+$("nextBtn").onclick = () => { teardown(); findMatch(); };
+$("leaveBtn").onclick = () => { teardown(); show("idle"); setStatus("", "в сети"); };
+$("mic-btn").onclick = () => {
+  if (!localStream) return;
+  micMuted = !micMuted;
+  localStream.getAudioTracks().forEach((t) => { t.enabled = !micMuted; });
+  $("mic-btn").classList.toggle("muted", micMuted);
+  $("mic-btn").textContent = micMuted ? "🔇" : "🎙️";
+};
+$("sendBtn").onclick = () => {
+  sendMessage($("msgInput").value);
+  $("msgInput").value = "";
+};
+$("msgInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    sendMessage($("msgInput").value);
+    $("msgInput").value = "";
+  }
+});
+</script>
+</body>
+</html>
